@@ -1,10 +1,32 @@
 <?php
 
+require_once __DIR__ . "/cors.php";
 require_once "db.php";
+require_once __DIR__ . '/vendor/autoload.php';
+
+use Dotenv\Dotenv;
+
+if (file_exists(__DIR__ . '/.env')) {
+    $dotenv = Dotenv::createImmutable(__DIR__);
+    $dotenv->safeLoad();
+}
 
 header("Content-Type: application/json");
 
 $data = json_decode(file_get_contents("php://input"), true);
+
+$secretKey = trim($data["secret_key"] ?? $data["admin_secret_key"] ?? "");
+$expectedSecret = $_ENV['ADMIN_SECRET_KEY'] ?? "manoharam_admin_secret_2026";
+
+// Verify secret key for admin creation
+if ($secretKey !== $expectedSecret) {
+    http_response_code(403);
+    echo json_encode([
+        "success" => false,
+        "message" => "Unauthorized: Valid admin secret_key is required to register an administrator"
+    ]);
+    exit;
+}
 
 $name = trim($data["name"] ?? "");
 $email = trim($data["email"] ?? "");
@@ -28,7 +50,6 @@ if (
 }
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-
     http_response_code(400);
 
     echo json_encode([
@@ -52,7 +73,6 @@ $stmt = $pdo->prepare(
 $stmt->execute([$email]);
 
 if ($stmt->fetch()) {
-
     http_response_code(409);
 
     echo json_encode([
@@ -61,33 +81,6 @@ if ($stmt->fetch()) {
     ]);
 
     exit;
-}
-
-/*
-|--------------------------------------------------------------------------
-| Check Existing Phone
-|--------------------------------------------------------------------------
-*/
-
-if (!empty($phone)) {
-
-    $stmt = $pdo->prepare(
-        "SELECT id FROM users WHERE phone = ? LIMIT 1"
-    );
-
-    $stmt->execute([$phone]);
-
-    if ($stmt->fetch()) {
-
-        http_response_code(409);
-
-        echo json_encode([
-            "success" => false,
-            "message" => "Phone already exists"
-        ]);
-
-        exit;
-    }
 }
 
 /*
@@ -103,13 +96,12 @@ $hashedPassword = password_hash(
 
 /*
 |--------------------------------------------------------------------------
-| Create Admin
+| Insert Admin User
 |--------------------------------------------------------------------------
 */
 
 $stmt = $pdo->prepare("
-    INSERT INTO users
-    (
+    INSERT INTO users (
         name,
         email,
         phone,
@@ -118,15 +110,8 @@ $stmt = $pdo->prepare("
         role,
         status
     )
-    VALUES
-    (
-        ?,
-        ?,
-        ?,
-        ?,
-        ?,
-        'ADMIN',
-        'active'
+    VALUES (
+        ?, ?, ?, ?, ?, 'ADMIN', 'active'
     )
 ");
 
@@ -138,13 +123,13 @@ $stmt->execute([
     $hashedPassword
 ]);
 
-$adminId = $pdo->lastInsertId();
+$userId = $pdo->lastInsertId();
 
 echo json_encode([
     "success" => true,
-    "message" => "Admin created successfully",
-    "admin" => [
-        "id" => $adminId,
+    "message" => "Admin registered successfully",
+    "user" => [
+        "id" => $userId,
         "name" => $name,
         "email" => $email,
         "role" => "ADMIN"

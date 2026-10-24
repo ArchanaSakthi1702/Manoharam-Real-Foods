@@ -307,4 +307,56 @@ class MailHelper
             throw $e;
         }
     }
+
+    public static function sendPasswordResetEmail($toEmail, $toName, $token)
+    {
+        $username = $_ENV['USERNAME'] ?? '';
+        $password = $_ENV['PASSWORD'] ?? '';
+
+        if (!$username || !$password) {
+            throw new Exception("Mail configuration missing in .env");
+        }
+
+        $mail = new PHPMailer(true);
+
+        try {
+            $mail->isSMTP();
+            $mail->Host       = 'smtp.gmail.com';
+            $mail->SMTPAuth   = true;
+            $mail->Username   = $username;
+            $mail->Password   = $password;
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port       = 587;
+
+            $mail->setFrom($username, 'Manoharam Real Foods');
+            $mail->addAddress($toEmail, $toName);
+            $mail->isHTML(true);
+            $mail->Subject = "🔑 Password Reset Request - Manoharam Real Foods";
+
+            $mail->Body = "
+            <!DOCTYPE html><html><head><meta charset='UTF-8'></head>
+            <body style='font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;'>
+            <div style='max-width:600px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1);'>
+              <div style='background:#C1272D;color:white;padding:20px;text-align:center;'>
+                <h2 style='margin:0;'>Password Reset Request</h2>
+              </div>
+              <div style='padding:25px;'>
+                <p>Hello <b>" . htmlspecialchars($toName) . "</b>,</p>
+                <p>We received a request to reset your password for your Manoharam Real Foods account.</p>
+                <p>Your password reset code/token is:</p>
+                <div style='background:#fdf2f2;border:1px dashed #C1272D;padding:15px;font-size:22px;font-weight:bold;letter-spacing:4px;text-align:center;color:#C1272D;border-radius:8px;'>
+                  {$token}
+                </div>
+                <p style='color:#666;font-size:13px;margin-top:20px;'>This token will expire in 15 minutes. If you did not request this, please ignore this email.</p>
+              </div>
+            </div>
+            </body></html>";
+
+            $mail->send();
+            return true;
+        } catch (Exception $e) {
+            error_log("Password reset mail error: " . $mail->ErrorInfo);
+            throw $e;
+        }
+    }
 }

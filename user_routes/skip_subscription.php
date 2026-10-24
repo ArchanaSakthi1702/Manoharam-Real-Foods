@@ -41,7 +41,8 @@ try {
     $stmt = $pdo->prepare("
         SELECT
             s.id,
-            sp.daily_rate
+            sp.price_per_week,
+            ROUND(sp.price_per_week / 7, 2) AS daily_rate
         FROM subscriptions s
         JOIN subscription_plans sp
             ON sp.id = s.plan_id

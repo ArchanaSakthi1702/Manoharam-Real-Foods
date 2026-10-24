@@ -22,6 +22,7 @@ $data = json_decode(
 
 $order_id = $data["order_id"] ?? null;
 $status = $data["status"] ?? null;
+$cancellation_reason = trim($data["cancellation_reason"] ?? $data["reason"] ?? "");
 
 $allowedStatuses = [
     "CONFIRMED",
@@ -34,7 +35,6 @@ if (
     !$order_id ||
     !$status
 ) {
-
     http_response_code(400);
 
     echo json_encode([
@@ -46,7 +46,6 @@ if (
 }
 
 if (!in_array($status, $allowedStatuses)) {
-
     http_response_code(400);
 
     echo json_encode([
@@ -58,7 +57,6 @@ if (!in_array($status, $allowedStatuses)) {
 }
 
 try {
-
     $pdo->beginTransaction();
 
     // Check order
@@ -69,6 +67,7 @@ try {
         FROM orders
         WHERE id = ?
         LIMIT 1
+        FOR UPDATE
     ");
 
     $stmt->execute([$order_id]);
@@ -88,17 +87,78 @@ try {
         );
     }
 
-    // Update status
-    $stmt = $pdo->prepare("
-        UPDATE orders
-        SET status = ?
-        WHERE id = ?
-    ");
+    // If changing to CANCELLED, restore inventory
+    if ($status === 'CANCELLED') {
+        $restored = false;
+        try {
+            $stmtDeductions = $pdo->prepare("
+                SELECT batch_id, quantity FROM order_batch_deductions WHERE order_id = ?
+            ");
+            $stmtDeductions->execute([$order_id]);
+            $deductions = $stmtDeductions->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmt->execute([
-        $status,
-        $order_id
-    ]);
+            foreach ($deductions as $d) {
+                $stmtRestore = $pdo->prepare("
+                    UPDATE inventory_batches
+                    SET remaining_quantity = remaining_quantity + ?
+                    WHERE id = ?
+                ");
+                $stmtRestore->execute([$d["quantity"], $d["batch_id"]]);
+                $restored = true;
+            }
+        } catch (PDOException $e) {
+            $deductions = [];
+        }
+
+        // Fallback restoration
+        if (!$restored) {
+            $stmtItems = $pdo->prepare("SELECT product_id, quantity FROM order_items WHERE order_id = ?");
+            $stmtItems->execute([$order_id]);
+            $items = $stmtItems->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($items as $item) {
+                $stmtBatch = $pdo->prepare("
+                    SELECT id FROM inventory_batches
+                    WHERE product_id = ?
+                    ORDER BY expiry_date DESC, id DESC
+                    LIMIT 1
+                ");
+                $stmtBatch->execute([$item["product_id"]]);
+                $batch = $stmtBatch->fetch(PDO::FETCH_ASSOC);
+
+                if ($batch) {
+                    $stmtRestore = $pdo->prepare("
+                        UPDATE inventory_batches
+                        SET remaining_quantity = remaining_quantity + ?
+                        WHERE id = ?
+                    ");
+                    $stmtRestore->execute([$item["quantity"], $batch["id"]]);
+                }
+            }
+        }
+    }
+
+    // Update status
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE orders
+            SET status = ?, cancellation_reason = ?, cancelled_at = IF(? = 'CANCELLED', NOW(), cancelled_at)
+            WHERE id = ?
+        ");
+        $stmt->execute([
+            $status,
+            ($status === 'CANCELLED' ? ($cancellation_reason ?: "Cancelled by administrator") : null),
+            $status,
+            $order_id
+        ]);
+    } catch (PDOException $e) {
+        $stmt = $pdo->prepare("
+            UPDATE orders
+            SET status = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$status, $order_id]);
+    }
 
     $pdo->commit();
 
@@ -112,7 +172,6 @@ try {
     ]);
 
 } catch (Exception $e) {
-
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
