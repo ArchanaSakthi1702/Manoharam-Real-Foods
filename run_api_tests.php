@@ -280,6 +280,138 @@ class ApiTester
             $this->assert($resetRes["status_code"] === 200 && ($resetRes["data"]["success"] ?? false), "POST /reset_password.php resets password with token");
         }
 
+        // 8. SAVED ADDRESS BOOK
+        echo "\n--- Section 8: Saved Address Book ---\n";
+        $addAddrRes = $this->request("POST", "/user_routes/add_address.php", [
+            "recipient_name" => "Home Delivery",
+            "recipient_phone" => $testPhone,
+            "address_line1" => "Flat 4B, Hilltop Towers",
+            "city" => "Sivakasi",
+            "postal_code" => "626123",
+            "address_type" => "HOME",
+            "is_default" => true
+        ], $customerToken);
+        $addrId = $addAddrRes["data"]["address"]["id"] ?? null;
+        $this->assert($addAddrRes["status_code"] === 200 && $addrId, "POST /user_routes/add_address.php saves new address");
+
+        $getAddrsRes = $this->request("GET", "/user_routes/get_addresses.php", [], $customerToken);
+        $this->assert($getAddrsRes["status_code"] === 200 && count($getAddrsRes["data"]["addresses"]) >= 1, "GET /user_routes/get_addresses.php lists saved addresses");
+
+        $updAddrRes = $this->request("POST", "/user_routes/update_address.php", [
+            "id" => $addrId,
+            "address_line1" => "Flat 4B, Hilltop Towers (Renovated)",
+            "city" => "Sivakasi",
+            "postal_code" => "626123"
+        ], $customerToken);
+        $this->assert($updAddrRes["status_code"] === 200 && ($updAddrRes["data"]["success"] ?? false), "POST /user_routes/update_address.php updates address");
+
+        // 9. COUPONS & DISCOUNTS
+        echo "\n--- Section 9: Coupons & Promotions ---\n";
+        $testCouponCode = "TEST" . rand(100, 999);
+        $createCpnRes = $this->request("POST", "/admin_routes/create_coupon.php", [
+            "code" => $testCouponCode,
+            "description" => "Test Promo Coupon",
+            "discount_type" => "PERCENTAGE",
+            "discount_value" => 15.0,
+            "min_order_amount" => 100.0,
+            "max_discount_amount" => 50.0
+        ], $adminToken);
+        $this->assert($createCpnRes["status_code"] === 200 && ($createCpnRes["data"]["success"] ?? false), "POST /admin_routes/create_coupon.php creates coupon");
+
+        $listCpnsRes = $this->request("GET", "/admin_routes/list_coupons.php", [], $adminToken);
+        $this->assert($listCpnsRes["status_code"] === 200 && count($listCpnsRes["data"]["coupons"]) >= 1, "GET /admin_routes/list_coupons.php lists coupons");
+
+        $applyCpnRes = $this->request("POST", "/user_routes/apply_coupon.php", [
+            "code" => $testCouponCode,
+            "order_amount" => 300.0
+        ], $customerToken);
+        $this->assert(
+            $applyCpnRes["status_code"] === 200 && (float)($applyCpnRes["data"]["discount_amount"] ?? 0) === 45.0,
+            "POST /user_routes/apply_coupon.php calculates 15% discount correctly"
+        );
+
+        // 10. REVIEWS & RATINGS
+        echo "\n--- Section 10: Product Reviews & Ratings ---\n";
+        $addRevRes = $this->request("POST", "/user_routes/add_review.php", [
+            "product_id" => 1,
+            "rating" => 5,
+            "review_title" => "Delicious Authentic Flavor",
+            "review_text" => "Traditional flavor just like homemade pickle."
+        ], $customerToken);
+        $reviewId = $addRevRes["data"]["review_id"] ?? null;
+        $this->assert($addRevRes["status_code"] === 200 && $reviewId, "POST /user_routes/add_review.php adds product review");
+
+        $getRevsRes = $this->request("GET", "/get_product_reviews.php?product_id=1");
+        $this->assert($getRevsRes["status_code"] === 200 && count($getRevsRes["data"]["reviews"]) >= 1, "GET /get_product_reviews.php returns product reviews");
+
+        // 11. ORDER TRACKING & INVOICE
+        echo "\n--- Section 11: Order Tracking & Tax Invoice ---\n";
+        $trackRes = $this->request("GET", "/user_routes/track_order.php?order_id={$orderId}", [], $customerToken);
+        $this->assert($trackRes["status_code"] === 200 && isset($trackRes["data"]["timeline"]), "GET /user_routes/track_order.php returns order tracking timeline");
+
+        $invoiceRes = $this->request("GET", "/user_routes/download_invoice.php?order_id={$orderId}&format=json", [], $customerToken);
+        $this->assert($invoiceRes["status_code"] === 200 && isset($invoiceRes["data"]["invoice"]["invoice_number"]), "GET /user_routes/download_invoice.php generates invoice data");
+
+        // 12. ADMIN DASHBOARD & CUSTOMER MANAGEMENT
+        echo "\n--- Section 12: Admin Dashboard, Sales Analytics & Customer Management ---\n";
+        $dashRes = $this->request("GET", "/admin_routes/get_dashboard_stats.php", [], $adminToken);
+        $this->assert($dashRes["status_code"] === 200 && isset($dashRes["data"]["metrics"]["revenue_month"]), "GET /admin_routes/get_dashboard_stats.php returns KPI metrics");
+
+        $salesRes = $this->request("GET", "/admin_routes/sales_report.php", [], $adminToken);
+        $this->assert($salesRes["status_code"] === 200 && isset($salesRes["data"]["summary"]["total_revenue"]), "GET /admin_routes/sales_report.php generates sales report");
+
+        $custsRes = $this->request("GET", "/admin_routes/list_customers.php", [], $adminToken);
+        $this->assert($custsRes["status_code"] === 200 && count($custsRes["data"]["customers"]) >= 1, "GET /admin_routes/list_customers.php lists customers with spend");
+
+        $custDetailRes = $this->request("GET", "/admin_routes/get_customer_details.php?id=1", [], $adminToken);
+        $this->assert($custDetailRes["status_code"] === 200 && isset($custDetailRes["data"]["customer"]), "GET /admin_routes/get_customer_details.php returns customer profile & history");
+
+        $custStatusRes = $this->request("POST", "/admin_routes/update_customer_status.php", [
+            "id" => 1,
+            "status" => "active"
+        ], $adminToken);
+        $this->assert($custStatusRes["status_code"] === 200 && ($custStatusRes["data"]["success"] ?? false), "POST /admin_routes/update_customer_status.php updates account status");
+
+        // 13. ADMIN SERVICE HOLIDAYS / UNAVAILABLE DAYS (AUTO SKIPS & REFUNDS)
+        echo "\n--- Section 13: Service Holidays (Admin Declaration, Auto-Skips & Refunds) ---\n";
+        $holidayDate = date("Y-m-d", strtotime("+10 days"));
+        $addHolRes = $this->request("POST", "/admin_routes/add_service_holiday.php", [
+            "date" => $holidayDate,
+            "reason" => "Diwali Festival - Kitchen Closed"
+        ], $adminToken);
+        $this->assert(
+            $addHolRes["status_code"] === 200 && ($addHolRes["data"]["success"] ?? false),
+            "POST /admin_routes/add_service_holiday.php declares holiday & auto-skips active subscriptions with refund"
+        );
+
+        $listHolAdminRes = $this->request("GET", "/admin_routes/list_service_holidays.php", [], $adminToken);
+        $this->assert(
+            $listHolAdminRes["status_code"] === 200 && count($listHolAdminRes["data"]["holidays"]) >= 1,
+            "GET /admin_routes/list_service_holidays.php returns declared holidays with refund totals"
+        );
+
+        $listHolPubRes = $this->request("GET", "/list_service_holidays.php");
+        $this->assert(
+            $listHolPubRes["status_code"] === 200 && count($listHolPubRes["data"]["holidays"]) >= 1,
+            "GET /list_service_holidays.php returns upcoming holidays for frontend calendar"
+        );
+
+        $delHolRes = $this->request("POST", "/admin_routes/delete_service_holiday.php", [
+            "holiday_date" => $holidayDate
+        ], $adminToken);
+        $this->assert(
+            $delHolRes["status_code"] === 200 && ($delHolRes["data"]["success"] ?? false),
+            "POST /admin_routes/delete_service_holiday.php deletes holiday & resumes subscriptions"
+        );
+
+        // 14. CUSTOMER TODAY'S SCHEDULED DELIVERY
+        echo "\n--- Section 14: Customer Today's Scheduled Delivery ---\n";
+        $todayDelivRes = $this->request("GET", "/user_routes/get_today_delivery.php", [], $customerToken);
+        $this->assert(
+            $todayDelivRes["status_code"] === 200 && isset($todayDelivRes["data"]["day_of_week"]),
+            "GET /user_routes/get_today_delivery.php returns scheduled product & delivery status for customer"
+        );
+
         // SUMMARY
         echo "\n===============================================\n";
         echo "TEST RUN COMPLETE: {$this->passed} Passed, {$this->failed} Failed\n";

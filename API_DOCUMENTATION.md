@@ -520,6 +520,49 @@
 }
 ```
 
+### 6.13 Get Customer's Scheduled Delivery for Today
+- **Endpoint**: `GET /user_routes/get_today_delivery.php`
+- **Auth**: Bearer Token
+- **Query Parameters**: `date` (optional, format `YYYY-MM-DD`, defaults to today)
+- **Purpose**: Displays the food product being delivered to the customer today on their home screen / dashboard banner.
+- **Response**: `200 OK`
+```json
+{
+  "success": true,
+  "date": "2026-10-24",
+  "day_of_week": "Saturday",
+  "has_delivery_today": true,
+  "primary_delivery": {
+    "subscription_id": 5,
+    "plan_name": "Weekly Pickle Combo",
+    "delivery_status": "DELIVERING_TODAY",
+    "is_delivering": true,
+    "message": "Your scheduled product for today is Garlic Pickle",
+    "scheduled_product": {
+      "product_id": 1,
+      "name": "Garlic Pickle",
+      "category": "Pickles",
+      "portion_size": 500.0,
+      "unit": "g",
+      "selling_price": 220.0,
+      "description": "Traditional homemade garlic pickle...",
+      "image_url": "https://example.com/images/garlic-pickle.jpg",
+      "nutrition": {
+        "calories": 2728.5,
+        "protein": 61.9,
+        "carbs": 283.1,
+        "fat": 172.5,
+        "fiber": 47.6
+      }
+    },
+    "delivery_address": "Flat 302, Green Meadows, Sivakasi"
+  },
+  "direct_orders": []
+}
+```
+*(Possible `delivery_status` values: `DELIVERING_TODAY`, `WEEKEND_EXCLUDED`, `SERVICE_HOLIDAY`, `CUSTOMER_SKIPPED`)*
+
+
 ---
 
 ## 7. Admin APIs
@@ -643,7 +686,208 @@
 
 ---
 
-## 8. Razorpay Frontend Integration Workflow
+## 9. Saved Address Book APIs
+
+### 9.1 Add Address
+- **Endpoint**: `POST /user_routes/add_address.php`
+- **Auth**: Bearer Token
+- **Body**:
+```json
+{
+  "recipient_name": "Jane Doe",
+  "recipient_phone": "9876543210",
+  "address_line1": "Flat 302, Green Meadows",
+  "address_line2": "Gandhi Road",
+  "city": "Sivakasi",
+  "state": "Tamil Nadu",
+  "postal_code": "626123",
+  "landmark": "Near Bus Stand",
+  "address_type": "HOME",
+  "is_default": true
+}
+```
+
+### 9.2 Get Saved Addresses
+- **Endpoint**: `GET /user_routes/get_addresses.php`
+- **Auth**: Bearer Token
+- Returns list with default address first.
+
+### 9.3 Update Address
+- **Endpoint**: `POST /user_routes/update_address.php`
+- **Auth**: Bearer Token
+- **Body**: Include `id` (or `address_id`) along with updated fields.
+
+### 9.4 Set Default Address
+- **Endpoint**: `POST /user_routes/set_default_address.php`
+- **Auth**: Bearer Token
+- **Body**: `{ "address_id": 1 }`
+
+### 9.5 Delete Address
+- **Endpoint**: `POST /user_routes/delete_address.php`
+- **Auth**: Bearer Token
+- **Body**: `{ "address_id": 1 }`
+
+---
+
+## 10. Coupons & Discount Promotions
+
+### 10.1 Apply Coupon
+- **Endpoint**: `POST /user_routes/apply_coupon.php`
+- **Auth**: Bearer Token
+- **Body**:
+```json
+{
+  "code": "FESTIVE10",
+  "order_amount": 500.00
+}
+```
+*(If `order_amount` is omitted, the API automatically calculates the discount against the customer's current cart subtotal).*
+
+### 10.2 Admin: Create Coupon
+- **Endpoint**: `POST /admin_routes/create_coupon.php`
+- **Auth**: Bearer Token (ADMIN)
+- **Body**:
+```json
+{
+  "code": "FESTIVE10",
+  "description": "10% off up to ₹100",
+  "discount_type": "PERCENTAGE",
+  "discount_value": 10.0,
+  "min_order_amount": 300.0,
+  "max_discount_amount": 100.0,
+  "start_date": "2026-10-01",
+  "end_date": "2026-12-31",
+  "usage_limit": 500
+}
+```
+
+### 10.3 Admin: List Coupons
+- **Endpoint**: `GET /admin_routes/list_coupons.php`
+- **Auth**: Bearer Token (ADMIN)
+
+### 10.4 Admin: Update & Delete Coupon
+- **Update**: `POST /admin_routes/update_coupon.php` (`{ "id": 1, ... }`)
+- **Delete**: `POST /admin_routes/delete_coupon.php` (`{ "id": 1 }`)
+
+---
+
+## 11. Customer Product Reviews & Ratings
+
+### 11.1 Add Product Review
+- **Endpoint**: `POST /user_routes/add_review.php`
+- **Auth**: Bearer Token
+- **Body**:
+```json
+{
+  "product_id": 1,
+  "rating": 5,
+  "review_title": "Authentic and spicy!",
+  "review_text": "Tastes just like traditional homemade garlic pickle."
+}
+```
+
+### 11.2 Get Product Reviews (Public)
+- **Endpoint**: `GET /get_product_reviews.php?product_id=1`
+- **Auth**: None
+- **Response**: Returns `average_rating`, `total_reviews`, and list of customer reviews.
+
+### 11.3 Moderate Review (Admin)
+- **Endpoint**: `POST /admin_routes/moderate_review.php`
+- **Auth**: Bearer Token (ADMIN)
+- **Body**: `{ "review_id": 1, "status": "APPROVED" }` (or `"REJECTED"`)
+
+---
+
+## 12. Order Tracking & Printable Tax Invoice
+
+### 12.1 Visual Order Tracking Timeline
+- **Endpoint**: `GET /user_routes/track_order.php?order_id=14`
+- **Auth**: Bearer Token
+- **Response**: Step-by-step progress tracking (`PLACED`, `CONFIRMED`, `PREPARING`, `OUT_FOR_DELIVERY`, `DELIVERED`).
+
+### 12.2 Printable Tax Invoice
+- **Endpoint**: `GET /user_routes/download_invoice.php?order_id=14`
+  - Returns a ready-to-print HTML tax invoice.
+- **JSON format**: `GET /user_routes/download_invoice.php?order_id=14&format=json`
+  - Returns complete invoice JSON payload.
+
+---
+
+## 13. Admin Dashboard & Customer Management
+
+### 13.1 Executive Real-Time Dashboard Stats
+- **Endpoint**: `GET /admin_routes/get_dashboard_stats.php`
+- **Auth**: Bearer Token (ADMIN)
+- **Response**: Returns today's revenue, month's revenue, pending orders count, active subscriptions count, low stock alert count, recent 5 orders, and recent 5 subscriptions.
+
+### 13.2 Sales Reports & Analytics
+- **Endpoint**: `GET /admin_routes/sales_report.php?start_date=2026-10-01&end_date=2026-10-31`
+- **Auth**: Bearer Token (ADMIN)
+- **Response**: Total sales volume, gross revenue, average order value, daily trend graph data, and top 5 best-selling products.
+
+### 13.3 Customer Management
+- **List Customers**: `GET /admin_routes/list_customers.php?search=sakthi&page=1&limit=10`
+  - Returns customer list with total order counts and lifetime spend.
+- **Customer Details**: `GET /admin_routes/get_customer_details.php?id=1`
+  - Returns full customer profile, all past orders, active subscriptions, and saved addresses.
+- **Update Customer Status**: `POST /admin_routes/update_customer_status.php`
+  - Body: `{ "id": 1, "status": "blocked" }` (`active`, `inactive`, `blocked`).
+
+---
+
+## 14. Service Holidays & Non-Operational Days
+
+The Admin has full authority to mark days in any month when the kitchen or delivery service is not available (e.g. festivals, maintenance). When a holiday is declared, **all active subscriptions running on that day are automatically skipped and credited with a daily refund**.
+
+### 14.1 Admin: Declare Service Holiday / Unavailable Day(s)
+- **Endpoint**: `POST /admin_routes/add_service_holiday.php`
+- **Auth**: Bearer Token (ADMIN)
+- **Body** (Single Date):
+```json
+{
+  "date": "2026-11-14",
+  "reason": "Diwali Festival - Kitchen Closed"
+}
+```
+- **Body** (Multiple Dates):
+```json
+{
+  "dates": ["2026-11-14", "2026-11-15"],
+  "reason": "Diwali Festival Holidays"
+}
+```
+- **Response**: `200 OK`
+```json
+{
+  "success": true,
+  "message": "Service unavailable day(s) registered successfully. Affected subscriptions have been automatically skipped with refunds.",
+  "dates_added": ["2026-11-14", "2026-11-15"],
+  "reason": "Diwali Festival Holidays",
+  "total_subscriptions_skipped": 24,
+  "total_refund_amount": 1200.00
+}
+```
+
+### 14.2 Admin: List Declared Service Holidays
+- **Endpoint**: `GET /admin_routes/list_service_holidays.php?month=2026-11`
+- **Auth**: Bearer Token (ADMIN)
+- **Response**: Returns holidays with total subscriptions skipped and total refund amount for each day.
+
+### 14.3 Admin: Delete Service Holiday (Resume Deliveries)
+- **Endpoint**: `POST /admin_routes/delete_service_holiday.php`
+- **Auth**: Bearer Token (ADMIN)
+- **Body**: `{ "holiday_date": "2026-11-14" }`
+- **Response**: Deletes holiday and removes future `HOLIDAY` skips from active subscriptions.
+
+### 14.4 Public / Customer: Get Upcoming Service Holidays
+- **Endpoint**: `GET /list_service_holidays.php?month=2026-11`
+- **Auth**: None
+- **Purpose**: Frontend calendar and date-pickers use this to display unavailable dates to customers when selecting start dates or previewing subscriptions.
+
+---
+
+## 15. Razorpay Frontend Integration Workflow
+
 
 ```javascript
 // 1. Customer places order

@@ -175,6 +175,30 @@ try {
         $pricing["per_day_amount"]
     );
 
+    // Automatically record administrative service holiday skips with refund
+    $stmtHolidays = $pdo->prepare("
+        SELECT holiday_date, reason FROM service_holidays
+        WHERE holiday_date >= ? AND holiday_date <= ?
+    ");
+    $stmtHolidays->execute([$start_date, $end_date]);
+    $holidays = $stmtHolidays->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmtHolidaySkip = $pdo->prepare("
+        INSERT INTO subscription_skips (
+            subscription_id, skip_date, refund_amount, reason, skip_type
+        ) VALUES (?, ?, ?, ?, 'HOLIDAY')
+        ON DUPLICATE KEY UPDATE reason = VALUES(reason), skip_type = 'HOLIDAY'
+    ");
+
+    foreach ($holidays as $h) {
+        $stmtHolidaySkip->execute([
+            $subscription_id,
+            $h["holiday_date"],
+            $pricing["per_day_amount"],
+            $h["reason"]
+        ]);
+    }
+
     $pdo->commit();
 
     echo json_encode([

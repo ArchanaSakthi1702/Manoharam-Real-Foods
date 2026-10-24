@@ -135,6 +135,16 @@ try {
 
     $rows = $productStmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // Fetch administrative service holidays falling in this period
+    $stmtHolidays = $pdo->prepare("
+        SELECT holiday_date, reason FROM service_holidays
+        WHERE holiday_date >= ? AND holiday_date <= ?
+        ORDER BY holiday_date ASC
+    ");
+    $stmtHolidays->execute([$startDate, $endDate]);
+    $serviceHolidays = $stmtHolidays->fetchAll(PDO::FETCH_ASSOC);
+    $holidayMap = array_column($serviceHolidays, "reason", "holiday_date");
+
     $deliverySchedule = [];
 
     if (!empty($rows)) {
@@ -147,16 +157,20 @@ try {
 
         while ($currentDate <= $lastDate) {
 
-            $weekday =
-                (int)$currentDate->format("w");
+            $dateStr = $currentDate->format("Y-m-d");
+            $weekday = (int)$currentDate->format("w");
 
             if (
-                ($weekday === 6 &&
-                 $excludeSaturday)
+                ($weekday === 6 && $excludeSaturday)
                 ||
-                ($weekday === 0 &&
-                 $excludeSunday)
+                ($weekday === 0 && $excludeSunday)
             ) {
+                $currentDate->modify("+1 day");
+                continue;
+            }
+
+            // If this date is an admin declared service holiday, skip it in delivery schedule
+            if (isset($holidayMap[$dateStr])) {
                 $currentDate->modify("+1 day");
                 continue;
             }
@@ -240,6 +254,9 @@ try {
 
         "exclude_sunday" =>
             $excludeSunday,
+
+        "service_holidays" =>
+            $serviceHolidays,
 
         "total_deliveries" =>
             count($deliverySchedule),
