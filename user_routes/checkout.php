@@ -158,8 +158,8 @@ try {
     // --------------------------------------------------
     // Create order
     // --------------------------------------------------
-    $initialStatus = ($paymentMethod === 'ONLINE') ? 'PENDING' : 'CONFIRMED';
-    $paymentStatus = ($paymentMethod === 'ONLINE') ? 'PENDING' : 'PENDING';
+    $initialStatus = 'PENDING';
+    $paymentStatus = 'PENDING';
 
     try {
         $stmt = $pdo->prepare("

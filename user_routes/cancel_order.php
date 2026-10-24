@@ -50,7 +50,7 @@ try {
         throw new Exception("Order is already cancelled");
     }
 
-    if ($order["status"] !== "PENDING") {
+    if (!in_array($order["status"], ["PENDING", "CONFIRMED"])) {
         throw new Exception("Order cannot be cancelled because it is already " . strtolower(str_replace('_', ' ', $order["status"])));
     }
 
