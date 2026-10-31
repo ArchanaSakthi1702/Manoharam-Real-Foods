@@ -21,6 +21,9 @@ try {
     $min_price = $_GET['min_price'] ?? null;
     $max_price = $_GET['max_price'] ?? null;
 
+    $subscription_only = $_GET['subscription_only'] ?? $_GET['is_subscription_only'] ?? null;
+    $for_sale_only = $_GET['for_sale_only'] ?? null;
+
     $cursor = $_GET['cursor'] ?? null;
     $limit = (int)($_GET['limit'] ?? 10);
 
@@ -37,11 +40,13 @@ try {
             id,
             name,
             category,
+            quantity,
             unit,
             selling_price,
             description,
             image_url,
-            status
+            status,
+            is_subscription_only
         FROM products
         WHERE 1=1
     ";
@@ -89,6 +94,14 @@ try {
         $params[] = $max_price;
     }
 
+    if ($for_sale_only !== null && ($for_sale_only === '1' || strtolower((string)$for_sale_only) === 'true')) {
+        $sql .= " AND is_subscription_only = 0 ";
+    } elseif ($subscription_only !== null) {
+        $isSub = ($subscription_only === '1' || $subscription_only === 1 || strtolower((string)$subscription_only) === 'true') ? 1 : 0;
+        $sql .= " AND is_subscription_only = ? ";
+        $params[] = $isSub;
+    }
+
     // Cursor condition
     if (!empty($cursor)) {
 
@@ -109,6 +122,11 @@ try {
     $stmt->execute($params);
 
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($products as &$product) {
+        $product['is_subscription_only'] = (bool)($product['is_subscription_only'] ?? 0);
+    }
+    unset($product);
 
     $has_more = count($products) > $limit;
 

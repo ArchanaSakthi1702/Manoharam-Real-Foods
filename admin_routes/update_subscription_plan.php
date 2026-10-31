@@ -10,27 +10,39 @@ require_once "../helpers/upload_image.php";
 
 $admin = requireAdmin();
 
-$planId = (int)($_POST["id"] ?? 0);
+$data = $_POST;
+if (empty($data)) {
+    $json = json_decode(file_get_contents("php://input"), true);
+    if (is_array($json)) {
+        $data = $json;
+    }
+}
 
-$name = trim($_POST["name"] ?? "");
+$planId = (int)($data["id"] ?? $data["plan_id"] ?? 0);
+
+$name = trim($data["name"] ?? "");
 $category = strtoupper(
-    trim($_POST["category"] ?? "")
+    trim($data["category"] ?? "")
 );
 
 $pricePerWeek =
-    (float)($_POST["price_per_week"] ?? 0);
+    (float)($data["price_per_week"] ?? 0);
 
 $description =
-    trim($_POST["description"] ?? "");
+    trim($data["description"] ?? "");
 
 $status = strtoupper(
-    $_POST["status"] ?? "ACTIVE"
+    $data["status"] ?? "ACTIVE"
 );
 
-$productsInput = json_decode(
-    $_POST["products"] ?? "[]",
-    true
-);
+$rawProducts = $data["products"] ?? [];
+if (is_string($rawProducts)) {
+    $productsInput = json_decode($rawProducts, true) ?? [];
+} elseif (is_array($rawProducts)) {
+    $productsInput = $rawProducts;
+} else {
+    $productsInput = [];
+}
 
 if (
     $planId <= 0 ||
@@ -149,13 +161,17 @@ try {
 
     if (
         isset($_FILES["image"]) &&
-        $_FILES["image"]["error"] === 0
+        $_FILES["image"]["error"] !== UPLOAD_ERR_NO_FILE
     ) {
 
         $imageUrl = uploadImageToHostinger(
             $_FILES["image"],
             "subscription_plans"
         );
+    } elseif (!empty($data["image_url"])) {
+        $imageUrl = trim($data["image_url"]);
+    } elseif (!empty($data["image"]) && is_string($data["image"])) {
+        $imageUrl = trim($data["image"]);
     }
 
     // Validate products

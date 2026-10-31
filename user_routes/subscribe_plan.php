@@ -19,6 +19,7 @@ require_once "../helpers/date_helper.php";
 require_once "../helpers/pricing_helper.php";
 require_once "../helpers/skip_helper.php";
 require_once "../helpers/subscription_helper.php";
+require_once "../helpers/razorpay_helper.php";
 
 $user = authenticate();
 

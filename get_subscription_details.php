@@ -58,6 +58,7 @@ try {
             p.quantity,
             p.unit,
             p.image_url,
+            p.is_subscription_only,
             spp.delivery_order,
 
             rn.calories,
@@ -97,6 +98,7 @@ try {
             "quantity" => (float)$row["quantity"],
             "unit" => $row["unit"],
             "image_url" => $row["image_url"],
+            "is_subscription_only" => (bool)($row["is_subscription_only"] ?? 0),
             "delivery_order" => (int)$row["delivery_order"],
 
             "nutrition" => [

@@ -191,6 +191,8 @@
 - **Query Parameters**:
   - `limit` (default: 10, max: 100)
   - `cursor` (optional product id for pagination)
+  - `subscription_only` (optional: `1` or `true` for subscription-only items)
+  - `for_sale_only` (optional: `1` or `true` for direct-purchase items only)
 - **Response**: `200 OK`
 ```json
 {
@@ -208,6 +210,7 @@
       "description": "Nutritious Indian gooseberry pickle...",
       "image_url": "https://example.com/uploads/foods_profiles/amla.jpg",
       "status": "ACTIVE",
+      "is_subscription_only": false,
       "total_weight_g": 1000.0,
       "calories": 180.0,
       "protein": 2.5,
@@ -222,7 +225,7 @@
 ### 3.3 Product Details
 - **Endpoint**: `GET /product_details.php?id=1`
 - **Auth**: None
-- **Response**: `200 OK` (Includes full nutritional details and ingredients list)
+- **Response**: `200 OK` (Includes `is_subscription_only`, full nutritional details, and ingredients list)
 
 ### 3.4 Search & Filter Products
 - **Endpoint**: `GET /search_products.php?search=garlic&category=Pickles&min_price=100&max_price=300&limit=10`
@@ -232,6 +235,8 @@
   - `category`: Category name
   - `min_price`: Minimum selling price
   - `max_price`: Maximum selling price
+  - `subscription_only`: Optional `1`/`true` or `0`/`false`
+  - `for_sale_only`: Optional `1`/`true` to return only products eligible for direct cart purchase
 
 ---
 
@@ -240,6 +245,7 @@
 ### 4.1 Add to Cart (Increments quantity)
 - **Endpoint**: `POST /user_routes/add_to_cart.php`
 - **Auth**: Bearer Token
+- **Note**: Products marked `is_subscription_only: true` cannot be added to cart and return HTTP 400.
 - **Body**:
 ```json
 {
@@ -586,8 +592,17 @@
 
 ### 7.2 Create Product
 - **Endpoint**: `POST /admin_routes/create_product.php`
-- **Content-Type**: `multipart/form-data`
-- **Form Fields**: `name`, `category`, `quantity`, `unit` (`g`/`kg`), `selling_price`, `description`, `status` (`ACTIVE`/`INACTIVE`), and file `image`.
+- **Content-Type**: `multipart/form-data` or `application/json`
+- **Fields**:
+  - `name`: string (required)
+  - `category`: string
+  - `quantity`: numeric > 0 (required)
+  - `unit`: `g` or `kg` (required)
+  - `selling_price`: numeric (required for for-sale products; optional/0.00 for subscription-only products)
+  - `description`: text
+  - `status`: `ACTIVE` or `INACTIVE` (default: `ACTIVE`)
+  - `is_subscription_only`: boolean / integer (`1` or `0`, default: `0`). When `1`/`true`, designates the product as available **only for subscription plans**, preventing one-off cart additions and checkout sales.
+  - `image`: image file or `image_url` string.
 
 ### 7.3 Update Product
 - **Endpoint**: `POST /admin_routes/update_product.php`
@@ -598,11 +613,21 @@
   "id": 1,
   "name": "Garlic Pickle (Special Edition)",
   "selling_price": 240.0,
-  "status": "ACTIVE"
+  "status": "ACTIVE",
+  "is_subscription_only": false
 }
 ```
 
-### 7.4 Delete / Deactivate Product
+### 7.4 List Products for Subscriptions (Admin)
+- **Endpoint**: `GET /admin_routes/list_subscription_products.php?subscription_only=1`
+- **Auth**: Bearer Token (ADMIN)
+- **Query Parameters**:
+  - `subscription_only`: Optional filter (`1` for subscription-only products, or omit to view all subscribable active products)
+  - `search`: Keyword for name / description
+  - `category`: Category name
+- **Response**: List of active products with their subscription status and details.
+
+### 7.5 Delete / Deactivate Product
 - **Endpoint**: `POST /admin_routes/delete_product.php`
 - **Body**:
 ```json

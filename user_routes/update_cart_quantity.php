@@ -77,9 +77,9 @@ try {
         $stmt->execute([$cartId, $productId]);
         $message = "Item removed from cart";
     } else {
-        // Verify product exists and is active
+        // Verify product exists, is active, and is available for sale
         $stmt = $pdo->prepare("
-            SELECT id, name, selling_price FROM products
+            SELECT id, name, selling_price, is_subscription_only FROM products
             WHERE id = ? AND status = 'ACTIVE'
         ");
         $stmt->execute([$productId]);
@@ -90,6 +90,15 @@ try {
             echo json_encode([
                 "success" => false,
                 "message" => "Active product not found"
+            ]);
+            exit;
+        }
+
+        if (!empty($product['is_subscription_only'])) {
+            http_response_code(400);
+            echo json_encode([
+                "success" => false,
+                "message" => "This product is only available for subscription and cannot be purchased directly"
             ]);
             exit;
         }

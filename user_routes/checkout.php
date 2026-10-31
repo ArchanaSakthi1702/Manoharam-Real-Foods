@@ -70,7 +70,8 @@ try {
             ci.product_id,
             p.name,
             ci.quantity,
-            p.selling_price
+            p.selling_price,
+            p.is_subscription_only
         FROM cart_items ci
         INNER JOIN products p ON p.id = ci.product_id
         WHERE ci.cart_id = ?
@@ -81,6 +82,12 @@ try {
 
     if (count($items) === 0) {
         throw new Exception("Cart is empty");
+    }
+
+    foreach ($items as $item) {
+        if (!empty($item["is_subscription_only"])) {
+            throw new Exception("Product '" . $item["name"] . "' is only available for subscription and cannot be purchased directly");
+        }
     }
 
     // --------------------------------------------------

@@ -92,6 +92,7 @@ LIMIT 1
         p.quantity,
         p.unit,
         p.image_url,
+        p.is_subscription_only,
         spp.delivery_order,
 
         rn.calories,
@@ -292,6 +293,9 @@ while ($productIndex < $requiredDeliveries) {
 
                     "image_url" =>
                         $product["image_url"],
+
+                    "is_subscription_only" =>
+                        (bool)($product["is_subscription_only"] ?? 0),
 
                     "delivery_order" =>
                         (int)$product["delivery_order"],

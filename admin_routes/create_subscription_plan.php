@@ -9,29 +9,45 @@ require_once "../helpers/upload_image.php";
 
 $admin = requireAdmin();
 
-$name = trim($_POST["name"] ?? "");
-$pricePerWeek = (float)($_POST["price_per_week"] ?? 0);
-$description = trim($_POST["description"] ?? "");
-$category = strtoupper(
-    trim($_POST["category"] ?? "")
-);
-$status = strtoupper($_POST["status"] ?? "ACTIVE");
+$data = $_POST;
+if (empty($data)) {
+    $json = json_decode(file_get_contents("php://input"), true);
+    if (is_array($json)) {
+        $data = $json;
+    }
+}
 
-$productsInput = json_decode(
-    $_POST["products"] ?? "[]",
-    true
+$name = trim($data["name"] ?? "");
+$pricePerWeek = (float)($data["price_per_week"] ?? 0);
+$description = trim($data["description"] ?? "");
+$category = strtoupper(
+    trim($data["category"] ?? "")
 );
+$status = strtoupper($data["status"] ?? "ACTIVE");
+
+$rawProducts = $data["products"] ?? [];
+if (is_string($rawProducts)) {
+    $productsInput = json_decode($rawProducts, true) ?? [];
+} elseif (is_array($rawProducts)) {
+    $productsInput = $rawProducts;
+} else {
+    $productsInput = [];
+}
 
 $imageUrl = null;
 
 if (
     isset($_FILES["image"]) &&
-    $_FILES["image"]["error"] === 0
+    $_FILES["image"]["error"] !== UPLOAD_ERR_NO_FILE
 ) {
     $imageUrl = uploadImageToHostinger(
         $_FILES["image"],
         "subscription_plans"
     );
+} elseif (!empty($data["image_url"])) {
+    $imageUrl = trim($data["image_url"]);
+} elseif (!empty($data["image"]) && is_string($data["image"])) {
+    $imageUrl = trim($data["image"]);
 }
 
 if (

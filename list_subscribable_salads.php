@@ -105,6 +105,10 @@ try {
                 $product["id"] = (int)$product["id"];
             }
 
+            if (isset($product["is_subscription_only"])) {
+                $product["is_subscription_only"] = (bool)$product["is_subscription_only"];
+            }
+
             $productsByPlan[$planId][] = $product;
         }
 

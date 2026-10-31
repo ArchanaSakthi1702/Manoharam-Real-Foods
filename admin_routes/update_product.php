@@ -61,11 +61,22 @@ try {
     $status       = isset($data["status"]) ? strtoupper(trim($data["status"])) : $product["status"];
     $imageUrl     = $product["image_url"];
 
+    $isSubscriptionOnly = isset($product["is_subscription_only"]) ? (int)$product["is_subscription_only"] : 0;
+    if (isset($data["is_subscription_only"])) {
+        $val = $data["is_subscription_only"];
+        $isSubscriptionOnly = ($val === true || $val === 1 || $val === "1" || strtolower((string)$val) === "true") ? 1 : 0;
+    } elseif (isset($data["subscription_only"])) {
+        $val = $data["subscription_only"];
+        $isSubscriptionOnly = ($val === true || $val === 1 || $val === "1" || strtolower((string)$val) === "true") ? 1 : 0;
+    }
+
     // Handle image file upload if provided
-    if (isset($_FILES["image"]) && $_FILES["image"]["error"] === 0) {
+    if (isset($_FILES["image"]) && $_FILES["image"]["error"] !== UPLOAD_ERR_NO_FILE) {
         $imageUrl = uploadImageToHostinger($_FILES["image"], "foods_profiles");
     } elseif (!empty($data["image_url"])) {
         $imageUrl = trim($data["image_url"]);
+    } elseif (!empty($data["image"]) && is_string($data["image"])) {
+        $imageUrl = trim($data["image"]);
     }
 
     // Validation
@@ -77,8 +88,14 @@ try {
         throw new Exception("unit must be either g or kg");
     }
 
-    if ($sellingPrice <= 0) {
-        throw new Exception("selling_price must be greater than 0");
+    if ($isSubscriptionOnly === 1) {
+        if ($sellingPrice < 0) {
+            throw new Exception("selling_price cannot be negative");
+        }
+    } else {
+        if ($sellingPrice <= 0) {
+            throw new Exception("selling_price must be greater than 0");
+        }
     }
 
     if (!in_array($status, ["ACTIVE", "INACTIVE"])) {
@@ -95,7 +112,8 @@ try {
             selling_price = ?,
             description = ?,
             image_url = ?,
-            status = ?
+            status = ?,
+            is_subscription_only = ?
         WHERE id = ?
     ");
 
@@ -108,6 +126,7 @@ try {
         $description,
         $imageUrl,
         $status,
+        $isSubscriptionOnly,
         $productId
     ]);
 
@@ -123,7 +142,8 @@ try {
             "selling_price" => $sellingPrice,
             "description" => $description,
             "image_url" => $imageUrl,
-            "status" => $status
+            "status" => $status,
+            "is_subscription_only" => (bool)$isSubscriptionOnly
         ]
     ]);
 

@@ -6,6 +6,9 @@ require_once "auth/jwt_helper.php";
 header("Content-Type: application/json");
 
 $data = json_decode(file_get_contents("php://input"), true);
+if (!is_array($data)) {
+    $data = $_POST;
+}
 
 $email = trim($data["email"] ?? "");
 $password = $data["password"] ?? "";

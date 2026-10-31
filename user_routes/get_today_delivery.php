@@ -138,6 +138,7 @@ try {
                 p.selling_price,
                 p.description,
                 p.image_url,
+                p.is_subscription_only,
                 spp.delivery_order,
                 rn.calories,
                 rn.protein,
@@ -185,6 +186,7 @@ try {
                 "selling_price" => (float)$p["selling_price"],
                 "description"   => $p["description"],
                 "image_url"     => $p["image_url"],
+                "is_subscription_only" => (bool)($p["is_subscription_only"] ?? 0),
                 "nutrition"     => [
                     "calories" => (float)($p["calories"] ?? 0),
                     "protein"  => (float)($p["protein"] ?? 0),

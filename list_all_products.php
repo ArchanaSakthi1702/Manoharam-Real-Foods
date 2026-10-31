@@ -16,6 +16,8 @@ try {
 
     $cursor = $_GET['cursor'] ?? null;
     $limit = (int)($_GET['limit'] ?? 10);
+    $subscription_only = $_GET['subscription_only'] ?? $_GET['is_subscription_only'] ?? null;
+    $for_sale_only = $_GET['for_sale_only'] ?? null;
 
     if ($limit <= 0) {
         $limit = 10;
@@ -36,6 +38,7 @@ try {
         p.description,
         p.image_url,
         p.status,
+        p.is_subscription_only,
 
         r.total_weight_g,
 
@@ -58,10 +61,18 @@ try {
 
     $params = [];
 
+    if ($for_sale_only !== null && ($for_sale_only === '1' || strtolower((string)$for_sale_only) === 'true')) {
+        $sql .= " AND p.is_subscription_only = 0 ";
+    } elseif ($subscription_only !== null) {
+        $isSub = ($subscription_only === '1' || $subscription_only === 1 || strtolower((string)$subscription_only) === 'true') ? 1 : 0;
+        $sql .= " AND p.is_subscription_only = ? ";
+        $params[] = $isSub;
+    }
+
     if (!empty($cursor)) {
 
         $sql .= "
-            AND id < ?
+            AND p.id < ?
         ";
 
         $params[] = $cursor;
@@ -79,6 +90,7 @@ try {
 
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($products as &$product) {
+        $product['is_subscription_only'] = (bool)($product['is_subscription_only'] ?? 0);
 
     if (
         strtolower($product['unit']) === 'kg'

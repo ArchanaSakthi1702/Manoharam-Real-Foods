@@ -42,6 +42,7 @@ try {
             p.description,
             p.image_url,
             p.status,
+            p.is_subscription_only,
 
             r.id AS recipe_id,
             r.total_weight_g,
@@ -198,6 +199,7 @@ try {
             "description" => $product['description'],
             "image_url" => $product['image_url'],
             "status" => $product['status'],
+            "is_subscription_only" => (bool)($product['is_subscription_only'] ?? 0),
 
             "nutrition" => $nutrition,
 

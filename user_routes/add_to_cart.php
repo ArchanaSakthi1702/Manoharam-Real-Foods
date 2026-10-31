@@ -29,23 +29,36 @@ if (!$product_id || $quantity <= 0) {
 
 try {
 
-    // Check product exists
+    // Check product exists and is available for individual sale
     $stmt = $pdo->prepare("
-        SELECT id
+        SELECT id, name, is_subscription_only
         FROM products
         WHERE id = ?
         AND status = 'ACTIVE'
     ");
 
     $stmt->execute([$product_id]);
+    $product = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$stmt->fetch()) {
+    if (!$product) {
 
         http_response_code(404);
 
         echo json_encode([
             "success" => false,
             "message" => "Product not found"
+        ]);
+
+        exit;
+    }
+
+    if (!empty($product['is_subscription_only'])) {
+
+        http_response_code(400);
+
+        echo json_encode([
+            "success" => false,
+            "message" => "This product is only available for subscription and cannot be purchased directly"
         ]);
 
         exit;

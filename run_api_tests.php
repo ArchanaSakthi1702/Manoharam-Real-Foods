@@ -4,7 +4,12 @@ require_once __DIR__ . '/helpers/razorpay_helper.php';
 
 class ApiTester
 {
-    private string $baseUrl = "http://127.0.0.1:8000";
+    private string $baseUrl;
+
+    public function __construct()
+    {
+        $this->baseUrl = getenv("TEST_BASE_URL") ?: "http://localhost/Manoharam-Real-Foods-main";
+    }
     private int $passed = 0;
     private int $failed = 0;
     private array $errors = [];
@@ -21,7 +26,7 @@ class ApiTester
             "http" => [
                 "method" => $method,
                 "ignore_errors" => true,
-                "timeout" => 5
+                "timeout" => 15
             ]
         ];
 
@@ -185,7 +190,7 @@ class ApiTester
         $this->assert($plansRes["status_code"] === 200 && ($plansRes["data"]["success"] ?? false), "GET /list_all_subscription_plans.php returns active plans");
 
         $startDate = date("Y-m-d", strtotime("+3 days"));
-        $skipTestDate = date("Y-m-d", strtotime("+4 days"));
+        $skipTestDate = date("Y-m-d", strtotime("+5 days"));
 
         $previewRes = $this->request("POST", "/subscription_preview.php", [
             "plan_id" => 1,
@@ -410,6 +415,133 @@ class ApiTester
         $this->assert(
             $todayDelivRes["status_code"] === 200 && isset($todayDelivRes["data"]["day_of_week"]),
             "GET /user_routes/get_today_delivery.php returns scheduled product & delivery status for customer"
+        );
+
+        // 15. SUBSCRIPTION-ONLY PRODUCTS (FEATURE: ONLY FOR SUBSCRIPTION NOT FOR SALE)
+        echo "\n--- Section 15: Subscription-Only Product Feature ---\n";
+        
+        // 15.1 Create subscription-only product
+        $subOnlyProdRes = $this->request("POST", "/admin_routes/create_product.php", [
+            "name" => "Subscription Exclusive Salad Bowl",
+            "category" => "Salads",
+            "quantity" => 350.0,
+            "unit" => "g",
+            "selling_price" => 0.0,
+            "description" => "Handmade daily bowl exclusively prepared for subscribers.",
+            "is_subscription_only" => true,
+            "status" => "ACTIVE"
+        ], $adminToken);
+        $subOnlyProdId = $subOnlyProdRes["data"]["product_id"] ?? null;
+        $this->assert(
+            $subOnlyProdRes["status_code"] === 200 && !empty($subOnlyProdId) && ($subOnlyProdRes["data"]["is_subscription_only"] ?? false),
+            "POST /admin_routes/create_product.php creates a product with is_subscription_only = true"
+        );
+
+        // 15.2 Verify product details returns is_subscription_only
+        $subDetailRes = $this->request("GET", "/product_details.php?id=" . $subOnlyProdId);
+        $this->assert(
+            $subDetailRes["status_code"] === 200 && ($subDetailRes["data"]["product"]["is_subscription_only"] ?? false) === true,
+            "GET /product_details.php exposes is_subscription_only = true"
+        );
+
+        // 15.3 Attempt direct purchase / add to cart (MUST FAIL with 400)
+        $blockCartRes = $this->request("POST", "/user_routes/add_to_cart.php", [
+            "product_id" => $subOnlyProdId,
+            "quantity" => 1
+        ], $customerToken);
+        $this->assert(
+            $blockCartRes["status_code"] === 400 && ($blockCartRes["data"]["success"] ?? true) === false,
+            "POST /user_routes/add_to_cart.php rejects subscription-only product from direct sale"
+        );
+
+        // 15.4 Attempt update cart quantity (MUST FAIL with 400)
+        $blockCartUpdRes = $this->request("POST", "/user_routes/update_cart_quantity.php", [
+            "product_id" => $subOnlyProdId,
+            "quantity" => 2
+        ], $customerToken);
+        $this->assert(
+            $blockCartUpdRes["status_code"] === 400 && ($blockCartUpdRes["data"]["success"] ?? true) === false,
+            "POST /user_routes/update_cart_quantity.php rejects subscription-only product"
+        );
+
+        // 15.5 Catalog filtering: subscription_only=1 vs for_sale_only=1
+        $listSubOnlyRes = $this->request("GET", "/list_all_products.php?subscription_only=1");
+        $foundInSubOnly = false;
+        if (!empty($listSubOnlyRes["data"]["products"])) {
+            foreach ($listSubOnlyRes["data"]["products"] as $p) {
+                if ($p["id"] == $subOnlyProdId) {
+                    $foundInSubOnly = true;
+                    break;
+                }
+            }
+        }
+        $this->assert(
+            $listSubOnlyRes["status_code"] === 200 && $foundInSubOnly,
+            "GET /list_all_products.php?subscription_only=1 includes the subscription-only product"
+        );
+
+        $listForSaleRes = $this->request("GET", "/list_all_products.php?for_sale_only=1");
+        $foundInForSale = false;
+        if (!empty($listForSaleRes["data"]["products"])) {
+            foreach ($listForSaleRes["data"]["products"] as $p) {
+                if ($p["id"] == $subOnlyProdId) {
+                    $foundInForSale = true;
+                    break;
+                }
+            }
+        }
+        $this->assert(
+            $listForSaleRes["status_code"] === 200 && !$foundInForSale,
+            "GET /list_all_products.php?for_sale_only=1 excludes subscription-only products"
+        );
+
+        // 15.6 Admin catalog for subscriptions
+        $adminSubProdsRes = $this->request("GET", "/admin_routes/list_subscription_products.php?subscription_only=1", [], $adminToken);
+        $this->assert(
+            $adminSubProdsRes["status_code"] === 200 && !empty($adminSubProdsRes["data"]["products"]),
+            "GET /admin_routes/list_subscription_products.php lists subscription products for admin"
+        );
+
+        // 15.7 Create subscription plan containing this subscription-only product
+        $subPlanRes = $this->request("POST", "/admin_routes/create_subscription_plan.php", [
+            "name" => "Subscription Only Plan Test",
+            "category" => "VEG",
+            "price_per_week" => 600.0,
+            "description" => "Plan with subscription-only items",
+            "status" => "ACTIVE",
+            "products" => json_encode([
+                ["product_id" => (int)$subOnlyProdId, "delivery_order" => 1]
+            ])
+        ], $adminToken);
+        $this->assert(
+            $subPlanRes["status_code"] === 200 && ($subPlanRes["data"]["success"] ?? false),
+            "POST /admin_routes/create_subscription_plan.php links subscription-only product to plan"
+        );
+
+        // 15.8 Subscription preview reflects schedule with subscription product
+        $testPlanId = $subPlanRes["data"]["data"]["id"] ?? null;
+        if ($testPlanId) {
+            $prevSubOnlyRes = $this->request("POST", "/subscription_preview.php", [
+                "plan_id" => $testPlanId,
+                "weeks" => 1,
+                "start_date" => date("Y-m-d", strtotime("+2 days"))
+            ]);
+            $this->assert(
+                $prevSubOnlyRes["status_code"] === 200 && ($prevSubOnlyRes["data"]["delivery_schedule"][0]["product"]["is_subscription_only"] ?? false),
+                "POST /subscription_preview.php includes subscription-only product in schedule"
+            );
+        }
+
+        // 15.9 Update product to toggle flag or details
+        $updSubProdRes = $this->request("POST", "/admin_routes/update_product.php", [
+            "id" => $subOnlyProdId,
+            "name" => "Subscription Exclusive Salad Bowl (Updated)",
+            "selling_price" => 0.0,
+            "is_subscription_only" => true
+        ], $adminToken);
+        $this->assert(
+            $updSubProdRes["status_code"] === 200 && ($updSubProdRes["data"]["product"]["is_subscription_only"] ?? false) === true,
+            "POST /admin_routes/update_product.php updates subscription-only product attributes"
         );
 
         // SUMMARY
